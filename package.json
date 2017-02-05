@@ -1,0 +1,23 @@
+{
+  "name": "tp-link-lb130",
+  "version": "0.1.0",
+  "description": "Library for controlling the TP-Link Smart Wi-Fi LED Bulb with Color Changing Hue LB130",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tplink",
+    "lb130",
+    "smart",
+    "bulb",
+    "color",
+    "led"
+  ],
+  "jshintConfig": {
+    "esversion": 6,
+    "node": true
+  },
+  "author": "Dango Technologies",
+  "license": "MIT"
+}
