@@ -68,15 +68,16 @@ class BulbCommandColor extends BulbTransitionCommand {
   }
 }
 
-class TPLinkLB130 {
+class TPLinkLB130Helper {
 
-  constructor(ip) {
-    this.LB130_ADDRESS = ip;
-    this.LB130_PORT = 9999;
-    this.TCP_HEADER_BYTES = new Buffer('0000008c', 'hex');
+  static get LB130_PORT() {
+    return 9999;
+  }
+  static get TCP_HEADER_BYTES() {
+    return new Buffer('0000008c', 'hex');
   }
 
-  sendUDPRequest(bulbCommand) {
+  static sendUDPRequest(bulbCommand, address) {
 
     return new Promise((resolve, reject) => {
       const dgram = require('dgram');
@@ -91,7 +92,7 @@ class TPLinkLB130 {
       // listener for responses
       client.on('message',
         (responseBuffer, destination) => {
-          let decryptedResponseBuffer = this.decryptUDP(responseBuffer);
+          let decryptedResponseBuffer = TPLinkLB130Helper.decryptUDP(responseBuffer);
 
           console.log(`[UDP] Response from ${destination.address}:${destination.port}...`);
           console.log(decryptedResponseBuffer.toString());
@@ -102,13 +103,13 @@ class TPLinkLB130 {
         });
       
       // send request to bulb
-      let requestDataBuffer = this.encrypt(new Buffer(JSON.stringify(bulbCommand)));
+      let requestDataBuffer = TPLinkLB130Helper.encrypt(new Buffer(JSON.stringify(bulbCommand)));
       client.send(
         requestDataBuffer, 
         0, 
         requestDataBuffer.length, 
-        this.LB130_PORT, 
-        this.LB130_ADDRESS,
+        TPLinkLB130Helper.LB130_PORT, 
+        address,
         (err, bytes) => {
           console.log(`[UDP] ${bytes} bytes sent | error: ${err}`);
           console.log(JSON.stringify(bulbCommand));
@@ -119,14 +120,14 @@ class TPLinkLB130 {
 
   // on/off commands can be sent over TCP as well as UDP
   // an extra 4 byte header must be prepended
-  sendTCPRequest(bulbCommand) {
+  static sendTCPRequest(bulbCommand, address) {
 
     return new Promise((resolve, reject) => {
       let decryptedResponseBuffer;
       let requestBuffer = 
         Buffer.concat([
-          this.TCP_HEADER_BYTES,    // add TCP request header info back in
-          this.encrypt(new Buffer(JSON.stringify(bulbCommand)))
+          TPLinkLB130Helper.TCP_HEADER_BYTES,    // add TCP request header info back in
+          TPLinkLB130Helper.encrypt(new Buffer(JSON.stringify(bulbCommand)))
         ]);
 
       var client = new net.Socket();
@@ -134,7 +135,7 @@ class TPLinkLB130 {
       // listener for responses
       client.on('data', 
         (responseBuffer) => {
-          decryptedResponseBuffer = this.decryptTCP(responseBuffer);
+          decryptedResponseBuffer = TPLinkLB130Helper.decryptTCP(responseBuffer);
 
           console.log(`[TCP] Response from ${client.remoteAddress}:${client.remotePort}...`);
           console.log(decryptedResponseBuffer.toString());
@@ -151,7 +152,7 @@ class TPLinkLB130 {
         });
 
       // connect to bulb and send request
-      client.connect(this.LB130_PORT, this.LB130_ADDRESS, 
+      client.connect(TPLinkLB130Helper.LB130_PORT, address, 
         () => {
           console.log(`[TCP] Connected to ${client.remoteAddress}:${client.remotePort}`);
 
@@ -165,24 +166,24 @@ class TPLinkLB130 {
     
   }
 
-  encrypt(unencryptedBuffer) {
-    return this.xor(unencryptedBuffer, false);
+  static encrypt(unencryptedBuffer) {
+    return TPLinkLB130Helper.xor(unencryptedBuffer, false);
   }
 
-  decryptUDP(encryptedBuffer){
-    return this.xor(encryptedBuffer, true);
+  static decryptUDP(encryptedBuffer){
+    return TPLinkLB130Helper.xor(encryptedBuffer, true);
   }
 
-  decryptTCP(encryptedBuffer){
+  static decryptTCP(encryptedBuffer){
     // ignore TCP header info in the first 4 bytes in encrypted data
-    return this.xor(encryptedBuffer, true, 4);
+    return TPLinkLB130Helper.xor(encryptedBuffer, true, 4);
   }
 
-  xor(sourceBuffer, isSourceEncrypted, numOfBytesToSkip){
+  static xor(sourceBuffer, isSourceEncrypted, numOfBytesToSkip){
     numOfBytesToSkip = numOfBytesToSkip === undefined ? 0: numOfBytesToSkip;
     let encryptionKey = 171;
     
-    let bufferSize = Buffer.byteLength(sourceBuffer);
+    let bufferSize = sourceBuffer.length;
     let destBuffer = new Buffer(bufferSize - numOfBytesToSkip);
     let bytesRead = numOfBytesToSkip;
     let key = encryptionKey;
@@ -205,8 +206,43 @@ class TPLinkLB130 {
 
 }
 
-exports = TPLinkLB130;
-exports.BulbGetCommand = BulbGetCommand;
-exports.BulbCommandOnOff = BulbCommandOnOff;
-exports.BulbCommandBrightness = BulbCommandBrightness;
-exports.BulbCommandColor = BulbCommandColor;
+class TPLinkLB130 {
+
+  constructor(ip) {
+    this.LB130_ADDRESS = ip;
+  }
+
+  getStatus() {
+    return TPLinkLB130Helper.sendUDPRequest(new BulbGetCommand(), this.LB130_ADDRESS)
+      .then((responseBuffer) => {
+        let lightState = JSON.parse(responseBuffer.toString())['smartlife.iot.smartbulb.lightingservice'].get_light_state;
+        let onState;
+        if (lightState.on_off === 0) {
+          onState = lightState.dft_on_state;
+          onState.on_off = 0;
+        }
+        else {
+          onState = lightState;
+        }
+        return onState;
+      });
+  }
+
+  turnOn(transitionPeriod) {
+    return TPLinkLB130Helper.sendUDPRequest(new BulbCommandOnOff(1, transitionPeriod), this.LB130_ADDRESS);
+  }
+
+  turnOff(transitionPeriod) {
+    return TPLinkLB130Helper.sendUDPRequest(new BulbCommandOnOff(0, transitionPeriod), this.LB130_ADDRESS);
+  }
+
+  changeBrightness(brightness, transitionPeriod) {
+    return TPLinkLB130Helper.sendUDPRequest(new BulbCommandBrightness(brightness, transitionPeriod), this.LB130_ADDRESS);
+  }
+
+  changeColor(brightness, hue, saturation, transitionPeriod) {
+    return TPLinkLB130Helper.sendUDPRequest(new BulbCommandColor(brightness, hue, saturation, transitionPeriod), this.LB130_ADDRESS);
+  }
+}
+
+modules.exports = TPLinkLB130;
