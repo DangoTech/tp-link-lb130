@@ -245,4 +245,4 @@ class TPLinkLB130 {
   }
 }
 
-modules.exports = TPLinkLB130;
+module.exports = TPLinkLB130;
