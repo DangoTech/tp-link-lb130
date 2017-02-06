@@ -1,6 +1,6 @@
 {
   "name": "tp-link-lb130",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Library for controlling the TP-Link Smart Wi-Fi LED Bulb with Color Changing Hue LB130",
   "main": "index.js",
   "scripts": {
