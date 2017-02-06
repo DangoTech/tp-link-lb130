@@ -206,4 +206,7 @@ class TPLinkLB130 {
 }
 
 exports = TPLinkLB130;
-
+exports.BulbGetCommand = BulbGetCommand;
+exports.BulbCommandOnOff = BulbCommandOnOff;
+exports.BulbCommandBrightness = BulbCommandBrightness;
+exports.BulbCommandColor = BulbCommandColor;
